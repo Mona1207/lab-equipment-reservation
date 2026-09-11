@@ -3,32 +3,35 @@
 
 #include <QWidget>        // 控件基类
 
-class QTableWidget;       // 前向声明：表格控件
+class QScrollArea;        // 前向声明：滚动区域
+class QGridLayout;        // 前向声明：网格布局
 
 // =============================================================
-// EquipmentPage —— 设备管理页（界面组 D）
-// QTableWidget 绑定核心 ReservationManager::equipments()：
-//   refreshTable() 遍历设备，逐行显示 字符串id / 名称 / 状态(可用/已借出/维护中)；
-//   "添加设备"/"编辑设备"弹表单对话框，调核心 add_equipment/update_equipment；
-//   "删除选中"调 remove_equipment。
+// EquipmentPage —— 设备管理页（卡片网格布局，磨砂玻璃风格）
+// 主区域为圆角卡片网格，每张卡片：彩色图标 + 设备名 + 规格 + 状态标签 + 删除按钮
+// 顶部按钮：添加设备 / 编辑设备 / 导出CSV / 刷新
 // =============================================================
-class EquipmentPage : public QWidget   // 设备管理页
+class EquipmentPage : public QWidget
 {
-    Q_OBJECT                            // 信号槽元对象宏
+    Q_OBJECT
 public:
-    explicit EquipmentPage(QWidget *parent = nullptr);   // 构造
+    explicit EquipmentPage(QWidget *parent = nullptr);
 
 public slots:
-    void refreshTable();          // 任何数据变动后都调它重刷表格
+    void refreshTable();          // 重刷卡片网格
 
 private slots:
-    void onAddEquipment();        // 添加设备按钮
-    void onEditEquipment();       // 编辑设备按钮
-    void onDeleteEquipment();     // 删除选中设备
-    void onExportCsv();           // 导出设备列表为 CSV
+    void onAddEquipment();
+    void onEditEquipment();
+    void onDeleteEquipment();
+    void onExportCsv();
+    void onRefresh();
 
 private:
-    QTableWidget *m_table;        // 显示设备列表的表格
+    QScrollArea *m_scroll;        // 卡片滚动区域
+    QWidget     *m_gridContainer; // 网格容器
+    QGridLayout *m_grid;          // 卡片网格布局
+    QString      m_selectedId;    // 当前选中的设备编号
 };
 
-#endif // EQUIPMENTPAGE_H  // 头文件保护结束
+#endif // EQUIPMENTPAGE_H

@@ -1,29 +1,31 @@
 #include "EquipmentPage.h"   // 对应头文件
 #include "AppContext.h"      // 界面适配层（取核心管理器）
-#include "Theme.h"           // 全局主题（状态彩色单元格）
+#include "Theme.h"           // 全局主题
 
-#include "Equipment.h"       // 核心设备实体（枚举/取值方法）
+#include "Equipment.h"       // 核心设备实体
 
-#include <QVBoxLayout>       // 垂直布局
-#include <QHBoxLayout>       // 水平布局
-#include <QTableWidget>      // 表格控件
-#include <QHeaderView>       // 表头
-#include <QPushButton>       // 按钮
-#include <QDialog>           // 自定义添加设备对话框基类
-#include <QDialogButtonBox>  // 标准 确定/取消 按钮盒
-#include <QFormLayout>       // 添加设备表单布局
-#include <QLineEdit>         // 输入框
-#include <QComboBox>         // 保养方式下拉
-#include <QSpinBox>          // 周期数值输入
-#include <QMessageBox>       // 提示框
-#include <QFileDialog>       // 文件保存对话框
-#include <QFile>             // 文件操作
-#include <QTextStream>       // 文本流（写CSV）
-#include <QDateTime>         // 导出文件名用时间戳
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QGridLayout>
+#include <QScrollArea>
+#include <QFrame>
+#include <QLabel>
+#include <QPushButton>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QLineEdit>
+#include <QComboBox>
+#include <QSpinBox>
+#include <QMessageBox>
+#include <QFileDialog>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
+#include <QMouseEvent>
 
 // =============================================================
 // EquipmentDialog —— 通用设备表单对话框（添加/编辑双模式）
-// 编辑模式下编号不可改（设备编号是主键），其余字段预填现有值。
 // =============================================================
 class EquipmentDialog : public QDialog
 {
@@ -39,7 +41,7 @@ public:
         m_idEdit = new QLineEdit(this);
         m_idEdit->setPlaceholderText(QStringLiteral("如 EQ-0005"));
         if (m_mode == Edit) {
-            m_idEdit->setEnabled(false);   // 编辑模式下编号不可改
+            m_idEdit->setEnabled(false);
             m_idEdit->setStyleSheet(QStringLiteral("background: #f0f0f0; color: #888;"));
         }
 
@@ -61,7 +63,7 @@ public:
 
         auto *box = new QDialogButtonBox(
             QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
-        box->button(QDialogButtonBox::Ok)->setText(m_mode == Add ? QStringLiteral("添加") : QStringLiteral("保存"));
+        box->button(QDialogButtonBox::Ok)->setText(mode == Add ? QStringLiteral("添加") : QStringLiteral("保存"));
         box->button(QDialogButtonBox::Ok)->setProperty("primary", true);
         box->button(QDialogButtonBox::Cancel)->setText(QStringLiteral("取消"));
         connect(box, &QDialogButtonBox::accepted, this, &QDialog::accept);
@@ -76,7 +78,6 @@ public:
         lay->addRow(box);
     }
 
-    // 编辑模式：预填现有设备数据
     void setEquipment(const Equipment* eq) {
         if (!eq) return;
         m_idEdit->setText(AppContext::toQString(eq->id()));
@@ -86,7 +87,6 @@ public:
         m_valueSpin->setValue(eq->cycle_value());
     }
 
-    // 取表单结果
     bool collect(QString& id, QString& name, QString& spec,
                  CycleType& cycleType, int& cycleValue)
     {
@@ -99,7 +99,6 @@ public:
                                  QStringLiteral("设备编号与名称为必填项。"));
             return false;
         }
-        // 添加模式：检查编号重复；编辑模式：编号不可改，无需检查
         if (m_mode == Add && AppContext::get().manager().find_equipment(id.toStdString())) {
             QMessageBox::warning(this, QStringLiteral("添加失败"),
                                  QStringLiteral("该设备编号已存在。"));
@@ -120,64 +119,202 @@ private:
     QSpinBox  *m_valueSpin;
 };
 
-// 构建设备管理页
+// =============================================================
+// EquipmentCard —— 单张设备卡片（磨砂玻璃风格）
+// 点击卡片选中，再次点击取消选中
+// =============================================================
+class EquipmentCard : public QFrame
+{
+    Q_OBJECT
+public:
+    QString equipmentId;
+    bool    selected = false;
+
+    EquipmentCard(const Equipment* eq, QWidget *parent = nullptr)
+        : QFrame(parent)
+    {
+        setProperty("glassCard", true);
+        setFixedSize(320, 180);
+        setCursor(Qt::PointingHandCursor);
+        equipmentId = AppContext::toQString(eq->id());
+
+        const QString status = AppContext::toQString(eq->status_name());
+        const QColor sc = Theme::statusColor(status);
+        const QString hex = sc.name();
+
+        // 根据设备名选一个彩色图标块颜色
+        QString iconColor = "#6c7bff";
+        const QString nm = AppContext::toQString(eq->name());
+        if (nm.contains(QStringLiteral("示波器")))      iconColor = "#6c7bff";
+        else if (nm.contains(QStringLiteral("信号")))    iconColor = "#22b86a";
+        else if (nm.contains(QStringLiteral("万用")))   iconColor = "#f5a623";
+        else if (nm.contains(QStringLiteral("电源")))    iconColor = "#ef5350";
+
+        auto *mainLay = new QVBoxLayout(this);
+        mainLay->setContentsMargins(18, 16, 18, 14);
+        mainLay->setSpacing(8);
+
+        auto *topRow = new QHBoxLayout;
+        topRow->setSpacing(10);
+
+        QLabel *iconBox = new QLabel(this);
+        iconBox->setFixedSize(44, 44);
+        iconBox->setAlignment(Qt::AlignCenter);
+        iconBox->setText(QStringLiteral("⚙"));
+        iconBox->setStyleSheet(QStringLiteral(
+            "background: %1; border-radius: 12px; color: white; font-size: 20px;")
+            .arg(iconColor));
+        topRow->addWidget(iconBox);
+        topRow->addStretch();
+
+        QLabel *statusTag = new QLabel(QStringLiteral("● ") + status, this);
+        statusTag->setStyleSheet(QStringLiteral(
+            "color: %1; background: rgba(255,255,255,0.6); border-radius: 9px;"
+            "padding: 3px 12px; font-size: 12px; font-weight: bold;")
+            .arg(hex));
+        topRow->addWidget(statusTag);
+
+        mainLay->addLayout(topRow);
+
+        QLabel *nameLbl = new QLabel(nm, this);
+        QFont nf = nameLbl->font();
+        nf.setPointSize(13);
+        nf.setBold(true);
+        nameLbl->setFont(nf);
+        nameLbl->setStyleSheet("color: #2b3445;");
+        mainLay->addWidget(nameLbl);
+
+        QLabel *specLbl = new QLabel(AppContext::toQString(eq->spec()), this);
+        specLbl->setStyleSheet("color: #8a94a6; font-size: 12px;");
+        mainLay->addWidget(specLbl);
+
+        mainLay->addStretch();
+
+        auto *bottomRow = new QHBoxLayout;
+        bottomRow->setSpacing(8);
+
+        const QString cycle = (eq->cycle_type() == CycleType::Days)
+            ? QString(QStringLiteral("保养周期：%1 天")).arg(eq->cycle_value())
+            : QString(QStringLiteral("保养周期：%1 次")).arg(eq->cycle_value());
+        QLabel *cycleLbl = new QLabel(cycle, this);
+        cycleLbl->setStyleSheet("color: #a0aabf; font-size: 11px;");
+        bottomRow->addWidget(cycleLbl);
+        bottomRow->addStretch();
+
+        QPushButton *delBtn = new QPushButton(QStringLiteral("删除"), this);
+        delBtn->setFixedSize(56, 28);
+        delBtn->setStyleSheet(QStringLiteral(
+            "QPushButton { background: rgba(239,83,80,0.1); color: #ef5350;"
+            "border: 1px solid rgba(239,83,80,0.25); border-radius: 8px; font-size: 11px; padding: 0; }"
+            "QPushButton:hover { background: #ef5350; color: white; }"));
+        connect(delBtn, &QPushButton::clicked, this, &EquipmentCard::onDeleteClicked);
+        bottomRow->addWidget(delBtn);
+
+        mainLay->addLayout(bottomRow);
+    }
+
+    void setSelected(bool sel) {
+        selected = sel;
+        setStyleSheet(sel
+            ? QStringLiteral("QFrame[glassCard=\"true\"] { background: rgba(238,240,255,0.95); border: 2px solid #6c7bff; border-radius: 18px; }")
+            : QStringLiteral("QFrame[glassCard=\"true\"] { background: rgba(255,255,255,0.75); border-radius: 18px; border: 1px solid rgba(255,255,255,0.8); }"));
+    }
+
+signals:
+    void cardClicked(const QString& id);
+    void deleteRequested(const QString& id);
+
+protected:
+    void mousePressEvent(QMouseEvent *ev) override {
+        emit cardClicked(equipmentId);
+        QFrame::mousePressEvent(ev);
+    }
+
+private slots:
+    void onDeleteClicked() { emit deleteRequested(equipmentId); }
+};
+
+#include "EquipmentPage.moc"
+
+// =============================================================
+// EquipmentPage —— 设备管理页（卡片网格）
+// =============================================================
 EquipmentPage::EquipmentPage(QWidget *parent)
     : QWidget(parent)
 {
     QPushButton *addBtn = new QPushButton(QStringLiteral("＋ 添加设备"), this);
     addBtn->setProperty("primary", true);
     QPushButton *editBtn = new QPushButton(QStringLiteral("✎ 编辑设备"), this);
-    QPushButton *delBtn = new QPushButton(QStringLiteral("删除选中"), this);
     QPushButton *exportBtn = new QPushButton(QStringLiteral("📤 导出CSV"), this);
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("🔄 刷新"), this);
     connect(addBtn, &QPushButton::clicked, this, &EquipmentPage::onAddEquipment);
     connect(editBtn, &QPushButton::clicked, this, &EquipmentPage::onEditEquipment);
-    connect(delBtn, &QPushButton::clicked, this, &EquipmentPage::onDeleteEquipment);
     connect(exportBtn, &QPushButton::clicked, this, &EquipmentPage::onExportCsv);
+    connect(refreshBtn, &QPushButton::clicked, this, &EquipmentPage::onRefresh);
 
     QHBoxLayout *btnRow = new QHBoxLayout;
     btnRow->addWidget(addBtn);
     btnRow->addWidget(editBtn);
-    btnRow->addWidget(delBtn);
     btnRow->addWidget(exportBtn);
+    btnRow->addWidget(refreshBtn);
     btnRow->addStretch();
 
-    m_table = new QTableWidget(0, 3, this);
-    m_table->setHorizontalHeaderLabels(
-        { QStringLiteral("设备ID"), QStringLiteral("设备名称"), QStringLiteral("状态") });
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
-    m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setAlternatingRowColors(true);
-    m_table->verticalHeader()->setVisible(false);
-    m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+    m_scroll = new QScrollArea(this);
+    m_scroll->setWidgetResizable(true);
+
+    m_gridContainer = new QWidget;
+    m_gridContainer->setObjectName("cardGridContainer");
+    m_grid = new QGridLayout(m_gridContainer);
+    m_grid->setSpacing(20);
+    m_grid->setContentsMargins(4, 4, 4, 4);
+    m_scroll->setWidget(m_gridContainer);
 
     QVBoxLayout *lay = new QVBoxLayout(this);
-    lay->setContentsMargins(24, 24, 24, 24);
+    lay->setContentsMargins(24, 20, 24, 20);
     lay->setSpacing(16);
     lay->addLayout(btnRow);
-    lay->addWidget(m_table);
+    lay->addWidget(m_scroll);
 
     refreshTable();
 }
 
-// 遍历核心 equipments() 容器，逐行刷新
 void EquipmentPage::refreshTable()
 {
-    const auto& list = AppContext::get().manager().equipments();
-    m_table->setRowCount(static_cast<int>(list.size()));
+    while (QLayoutItem *item = m_grid->takeAt(0)) {
+        if (QWidget *w = item->widget()) w->deleteLater();
+        delete item;
+    }
 
-    for (int row = 0; row < static_cast<int>(list.size()); ++row)
-    {
-        const Equipment* e = list.at(row).get();
-        m_table->setItem(row, 0, new QTableWidgetItem(
-            AppContext::toQString(e->id())));
-        m_table->setItem(row, 1, new QTableWidgetItem(
-            AppContext::toQString(e->name())));
-        m_table->setItem(row, 2, Theme::makeStatusItem(
-            AppContext::toQString(e->status_name())));
+    const auto& list = AppContext::get().manager().equipments();
+    const int cols = 3;
+
+    for (int i = 0; i < static_cast<int>(list.size()); ++i) {
+        const Equipment* e = list.at(i).get();
+        auto *card = new EquipmentCard(e, m_gridContainer);
+
+        const QString id = AppContext::toQString(e->id());
+        if (id == m_selectedId) card->setSelected(true);
+
+        connect(card, &EquipmentCard::cardClicked, this, [this](const QString& cid) {
+            m_selectedId = (m_selectedId == cid) ? QString() : cid;
+            refreshTable();
+        });
+        connect(card, &EquipmentCard::deleteRequested, this, [this](const QString& cid) {
+            m_selectedId = cid;
+            onDeleteEquipment();
+        });
+
+        m_grid->addWidget(card, i / cols, i % cols);
+    }
+
+    if (list.empty()) {
+        QLabel *empty = new QLabel(QStringLiteral("暂无设备，点击「添加设备」开始"), m_gridContainer);
+        empty->setAlignment(Qt::AlignCenter);
+        empty->setStyleSheet("color: #8a94a6; font-size: 15px;");
+        m_grid->addWidget(empty, 0, 0);
     }
 }
 
-// 添加设备
 void EquipmentPage::onAddEquipment()
 {
     EquipmentDialog dlg(EquipmentDialog::Add, this);
@@ -193,23 +330,21 @@ void EquipmentPage::onAddEquipment()
             id.toStdString(), name.toStdString(),
             spec.toStdString(), cycleType, cycleValue);
 
+        m_selectedId = id;
         refreshTable();
         return;
     }
 }
 
-// 编辑设备
 void EquipmentPage::onEditEquipment()
 {
-    const int row = m_table->currentRow();
-    if (row < 0) {
+    if (m_selectedId.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("提示"),
-                                 QStringLiteral("请先选中一行设备"));
+                                 QStringLiteral("请先点击一张设备卡片"));
         return;
     }
 
-    const QString id = m_table->item(row, 0)->text();
-    const Equipment* eq = AppContext::get().manager().find_equipment(id.toStdString());
+    const Equipment* eq = AppContext::get().manager().find_equipment(m_selectedId.toStdString());
     if (!eq) {
         QMessageBox::warning(this, QStringLiteral("编辑失败"),
                              QStringLiteral("未找到该设备"));
@@ -217,7 +352,7 @@ void EquipmentPage::onEditEquipment()
     }
 
     EquipmentDialog dlg(EquipmentDialog::Edit, this);
-    dlg.setEquipment(eq);   // 预填现有数据
+    dlg.setEquipment(eq);
 
     while (dlg.exec() == QDialog::Accepted)
     {
@@ -243,28 +378,33 @@ void EquipmentPage::onEditEquipment()
     }
 }
 
-// 删除选中设备
 void EquipmentPage::onDeleteEquipment()
 {
-    const int row = m_table->currentRow();
-    if (row < 0) {
+    if (m_selectedId.isEmpty()) {
         QMessageBox::information(this, QStringLiteral("提示"),
-                                 QStringLiteral("请先选中一行设备"));
+                                 QStringLiteral("请先点击一张设备卡片"));
         return;
     }
-    const QString id = m_table->item(row, 0)->text();
-    const QString name = m_table->item(row, 1)->text();
+
+    const Equipment* eq = AppContext::get().manager().find_equipment(m_selectedId.toStdString());
+    const QString name = eq ? AppContext::toQString(eq->name()) : m_selectedId;
+
     const auto answer = QMessageBox::question(this,
         QStringLiteral("删除设备"),
-        QStringLiteral("确定删除设备「%1（%2）」吗？\n相关历史预约记录将保留。").arg(name, id),
+        QStringLiteral("确定删除设备「%1（%2）」吗？\n相关历史预约记录将保留。").arg(name, m_selectedId),
         QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
     if (answer != QMessageBox::Yes) return;
 
-    AppContext::get().manager().remove_equipment(id.toStdString());
+    AppContext::get().manager().remove_equipment(m_selectedId.toStdString());
+    m_selectedId.clear();
     refreshTable();
 }
 
-// 导出设备列表为 CSV 文件
+void EquipmentPage::onRefresh()
+{
+    refreshTable();
+}
+
 void EquipmentPage::onExportCsv()
 {
     const auto& list = AppContext::get().manager().equipments();
@@ -289,7 +429,6 @@ void EquipmentPage::onExportCsv()
     }
 
     QTextStream out(&file);
-    // 写 BOM 让 Excel 正确识别 UTF-8 中文
     out << "\xEF\xBB\xBF";
     out << "设备ID,设备名称,规格型号,状态,保养方式,周期值,已使用次数\n";
 

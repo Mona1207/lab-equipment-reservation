@@ -29,6 +29,7 @@
 #include <QStatusBar>
 
 // 导航项定义：图标 + 文字 + 页面副标题 + 页面索引
+// 对齐设计稿：仪表板 / 设备管理 / 我的预约 / 保养管理 / 统计分析 / 账户管理 / 审批管理
 struct NavItem {
     const char* icon;
     const char* text;
@@ -37,12 +38,13 @@ struct NavItem {
 };
 
 static const NavItem kNavItems[] = {
-    { "🏠", "首页",     "总览系统运行状态与待办事项", 0 },
+    { "🏠", "仪表板",   "总览系统运行状态与待办事项", 0 },
     { "🖥", "设备管理", "维护设备台账与状态信息",     1 },
     { "📅", "我的预约", "查看和管理您的预约记录",     2 },
     { "🔧", "保养管理", "查看并执行设备保养任务",     3 },
     { "📊", "统计分析", "图表化分析设备使用情况",     4 },
-    { "✅", "审批管理", "处理预约审批与归还确认",     5 },
+    { "👤", "账户管理", "查看账户信息与登录凭据",       5 },
+    { "✅", "审批管理", "处理预约审批与归还确认",       6 },
 };
 
 MainWindow::MainWindow(QWidget *parent)
@@ -51,14 +53,31 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(QStringLiteral("实验室设备预约管理系统"));
     resize(1280, 800);
 
-    // ==================== 左侧深色侧栏 ====================
+    // ==================== 左侧侧边栏 ====================
     auto *sidebar = new QWidget(this);
     sidebar->setObjectName(QStringLiteral("Sidebar"));
     sidebar->setFixedWidth(220);
 
-    // 顶部系统名
-    auto *appTitle = new QLabel(QStringLiteral("🔬 实验室设备"), sidebar);
+    // 顶部品牌标识：渐变方块 + 系统名
+    auto *brandBox = new QHBoxLayout;
+    brandBox->setContentsMargins(16, 0, 12, 0);
+    brandBox->setSpacing(10);
+
+    QLabel *brandLogo = new QLabel(QStringLiteral("设"), sidebar);
+    brandLogo->setFixedSize(36, 36);
+    brandLogo->setAlignment(Qt::AlignCenter);
+    brandLogo->setStyleSheet(QStringLiteral(
+        "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+        "stop:0 #6c7bff, stop:1 #a86cf5);"
+        "border-radius: 10px; color: white; font-size: 16px; font-weight: bold;"));
+
+    QLabel *appTitle = new QLabel(QStringLiteral("实验室设备\n预约管理系统"), sidebar);
     appTitle->setObjectName(QStringLiteral("AppTitle"));
+    appTitle->setStyleSheet(QStringLiteral("padding: 0; font-size: 14px; line-height: 1.3;"));
+
+    brandBox->addWidget(brandLogo);
+    brandBox->addWidget(appTitle);
+    brandBox->addStretch();
 
     // 导航列表
     m_nav = new QListWidget(sidebar);
@@ -104,7 +123,8 @@ MainWindow::MainWindow(QWidget *parent)
     auto *sideLay = new QVBoxLayout(sidebar);
     sideLay->setContentsMargins(0, 0, 0, 0);
     sideLay->setSpacing(0);
-    sideLay->addWidget(appTitle);
+    sideLay->addLayout(brandBox);
+    sideLay->addSpacing(8);
     sideLay->addWidget(m_nav, 1);
     sideLay->addWidget(footer);
 
@@ -118,7 +138,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     auto *titleBox = new QVBoxLayout;
     titleBox->setSpacing(2);
-    m_pageTitle = new QLabel(QStringLiteral("首页"), topBar);
+    m_pageTitle = new QLabel(QStringLiteral("仪表板"), topBar);
     m_pageTitle->setObjectName(QStringLiteral("PageTitle"));
     m_pageSubtitle = new QLabel(QString::fromUtf8(kNavItems[0].subtitle), topBar);
     m_pageSubtitle->setObjectName(QStringLiteral("PageSubtitle"));
@@ -133,7 +153,7 @@ MainWindow::MainWindow(QWidget *parent)
     // 页面堆叠
     m_pages = new QStackedWidget(rightArea);
 
-    // 页面0：首页
+    // 页面0：仪表板
     m_dashboard = new DashboardPage(this);
     m_pages->addWidget(m_dashboard);
 
@@ -192,7 +212,56 @@ MainWindow::MainWindow(QWidget *parent)
     m_statsPage = new StatsPage(this);
     m_pages->addWidget(m_statsPage);
 
-    // 页面5：审批
+    // 页面5：账户管理（简单信息展示页）
+    {
+        auto *acctPage = new QWidget(this);
+        acctPage->setObjectName("MainContent");
+        auto *acctLay = new QVBoxLayout(acctPage);
+        acctLay->setContentsMargins(32, 28, 32, 28);
+        acctLay->setSpacing(16);
+
+        auto *card = new QFrame(acctPage);
+        card->setProperty("glassCard", true);
+        card->setFixedWidth(420);
+        card->setFixedHeight(280);
+        auto *cardLay = new QVBoxLayout(card);
+        cardLay->setContentsMargins(28, 24, 28, 24);
+        cardLay->setSpacing(12);
+
+        User *u2 = AppContext::get().currentUser();
+        QLabel *avatar = new QLabel(card);
+        avatar->setFixedSize(64, 64);
+        avatar->setAlignment(Qt::AlignCenter);
+        avatar->setText(QStringLiteral("👤"));
+        avatar->setStyleSheet(QStringLiteral(
+            "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
+            "stop:0 #6c7bff, stop:1 #a86cf5);"
+            "border-radius: 32px; font-size: 28px;"));
+        cardLay->addWidget(avatar, 0, Qt::AlignCenter);
+
+        QLabel *nameL = new QLabel(u2 ? AppContext::toQString(u2->getName()) : QStringLiteral("未登录"), card);
+        nameL->setAlignment(Qt::AlignCenter);
+        QFont nf = nameL->font(); nf.setPointSize(16); nf.setBold(true);
+        nameL->setFont(nf);
+        cardLay->addWidget(nameL);
+
+        QLabel *roleL = new QLabel(QString::fromStdString(u2 ? u2->role_name() : "用户"), card);
+        roleL->setAlignment(Qt::AlignCenter);
+        roleL->setStyleSheet("color: #8a94a6;");
+        cardLay->addWidget(roleL);
+
+        cardLay->addSpacing(8);
+        QLabel *idL = new QLabel(QStringLiteral("用户 ID：%1").arg(u2 ? u2->getId() : 0), card);
+        idL->setAlignment(Qt::AlignCenter);
+        idL->setStyleSheet("color: #6b7688; font-size: 13px;");
+        cardLay->addWidget(idL);
+
+        acctLay->addWidget(card, 0, Qt::AlignLeft);
+        acctLay->addStretch();
+        m_pages->addWidget(acctPage);
+    }
+
+    // 页面6：审批
     m_adminPage = new AdminPage(this);
     m_pages->addWidget(m_adminPage);
 
@@ -215,7 +284,7 @@ MainWindow::MainWindow(QWidget *parent)
     rightLay->addWidget(topBar);
     rightLay->addWidget(m_pages, 1);
 
-    // 底部状态栏（参考图底部状态指标）
+    // 底部状态栏
     statusBar()->setSizeGripEnabled(false);
     m_statEquip   = new QLabel(this);
     m_statToday   = new QLabel(this);
@@ -374,7 +443,7 @@ void MainWindow::switchPage(int index)
 {
     m_pages->setCurrentIndex(index);
     // 更新顶栏标题 + 副标题
-    if (index >= 0 && index < 6) {
+    if (index >= 0 && index < 7) {
         m_pageTitle->setText(QString::fromUtf8(kNavItems[index].text));
         m_pageSubtitle->setText(QString::fromUtf8(kNavItems[index].subtitle));
     }
@@ -385,7 +454,8 @@ void MainWindow::switchPage(int index)
     case 2: refreshMyReservations();     break;
     case 3: m_maintPage->refreshTable(); break;
     case 4: m_statsPage->refresh();      break;
-    case 5: m_adminPage->refreshTable(); break;
+    case 5: /* 账户管理页静态信息 */       break;
+    case 6: m_adminPage->refreshTable(); break;
     }
     updateStatusBar();
 }
