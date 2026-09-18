@@ -1,26 +1,24 @@
-#include "AdminPage.h"    // 对应头文件
-#include "AppContext.h"   // 界面适配层
-#include "Theme.h"        // 全局主题（状态彩色单元格）
+#include "AdminPage.h"
+#include "AppContext.h"
+#include "Theme.h"
+#include "Reservation.h"
 
-#include "Reservation.h" // 核心预约实体（状态枚举）
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QPushButton>
+#include <QMessageBox>
+#include <QLabel>
+#include <QBrush>
+#include <QColor>
+#include <QFileDialog>
+#include <QFile>
+#include <QTextStream>
+#include <QDateTime>
 
-#include <QVBoxLayout>    // 垂直布局
-#include <QHBoxLayout>    // 水平布局
-#include <QTableWidget>   // 表格
-#include <QHeaderView>    // 表头
-#include <QPushButton>    // 按钮
-#include <QMessageBox>    // 弹窗
-#include <QLabel>         // 文本标签
-#include <QBrush>         // 画刷（单元格底色）
-#include <QColor>         // 颜色
-#include <QFileDialog>    // 文件保存对话框
-#include <QFile>          // 文件操作
-#include <QTextStream>    // 文本流（写CSV）
-#include <QDateTime>      // 导出文件名用时间戳
+static const int kResIdRole = Qt::UserRole + 1;
 
-static const int kResIdRole = Qt::UserRole + 1;   // 自定义角色：单元格里藏预约id字符串
-
-// 构造管理员审批页
 AdminPage::AdminPage(QWidget *parent)
     : QWidget(parent)
 {
@@ -60,7 +58,6 @@ AdminPage::AdminPage(QWidget *parent)
     refreshTable();
 }
 
-// 刷新审批表格：遍历核心 reservations() 双端队列
 void AdminPage::refreshTable()
 {
     const auto& list = AppContext::get().manager().reservations();
@@ -85,18 +82,18 @@ void AdminPage::refreshTable()
         statusItem->setData(kResIdRole, AppContext::toQString(r.id()));
         m_table->setItem(row, 5, statusItem);
 
+        // 待审批行整行浅琥珀底突出
         if (r.status() == ReservationStatus::Pending)
         {
             for (int c = 0; c < 6; ++c) {
                 auto *item = m_table->item(row, c);
-                if (item) item->setBackground(QBrush(QColor(255, 248, 220)));
+                if (item) item->setBackground(QBrush(QColor(255, 248, 225)));
             }
         }
         ++row;
     }
 }
 
-// 文件内辅助：取当前选中行隐藏的预约id
 static QString selectedResId(QTableWidget *table)
 {
     const int row = table->currentRow();
@@ -104,7 +101,6 @@ static QString selectedResId(QTableWidget *table)
     return table->item(row, 0)->data(kResIdRole).toString();
 }
 
-// 审批通过：调核心 batch_approve（内部只对"待审批"生效）
 void AdminPage::onApprove()
 {
     const QString resId = selectedResId(m_table);
@@ -125,7 +121,6 @@ void AdminPage::onApprove()
     emit dataChanged();
 }
 
-// 确认归还：调核心 complete_reservation（仅"已通过"可归还，并累计使用次数）
 void AdminPage::onReturn()
 {
     const QString resId = selectedResId(m_table);
@@ -146,7 +141,6 @@ void AdminPage::onReturn()
     emit dataChanged();
 }
 
-// 导出全部预约记录为 CSV
 void AdminPage::onExportCsv()
 {
     const auto& list = AppContext::get().manager().reservations();
