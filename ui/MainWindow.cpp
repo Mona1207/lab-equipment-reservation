@@ -29,7 +29,6 @@
 #include <QStatusBar>
 
 // 导航项定义：图标 + 文字 + 页面副标题 + 页面索引
-// 对齐设计稿：仪表板 / 设备管理 / 我的预约 / 保养管理 / 统计分析 / 账户管理 / 审批管理
 struct NavItem {
     const char* icon;
     const char* text;
@@ -58,7 +57,7 @@ MainWindow::MainWindow(QWidget *parent)
     sidebar->setObjectName(QStringLiteral("Sidebar"));
     sidebar->setFixedWidth(220);
 
-    // 顶部品牌标识：渐变方块 + 系统名
+    // 顶部品牌标识：深蓝方块 + 系统名
     auto *brandBox = new QHBoxLayout;
     brandBox->setContentsMargins(16, 0, 12, 0);
     brandBox->setSpacing(10);
@@ -67,9 +66,8 @@ MainWindow::MainWindow(QWidget *parent)
     brandLogo->setFixedSize(36, 36);
     brandLogo->setAlignment(Qt::AlignCenter);
     brandLogo->setStyleSheet(QStringLiteral(
-        "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-        "stop:0 #6c7bff, stop:1 #a86cf5);"
-        "border-radius: 10px; color: white; font-size: 16px; font-weight: bold;"));
+        "background: #1565c0;"
+        "border-radius: 4px; color: white; font-size: 16px; font-weight: bold;"));
 
     QLabel *appTitle = new QLabel(QStringLiteral("实验室设备\n预约管理系统"), sidebar);
     appTitle->setObjectName(QStringLiteral("AppTitle"));
@@ -234,8 +232,7 @@ MainWindow::MainWindow(QWidget *parent)
         avatar->setAlignment(Qt::AlignCenter);
         avatar->setText(QStringLiteral("👤"));
         avatar->setStyleSheet(QStringLiteral(
-            "background: qlineargradient(x1:0,y1:0,x2:1,y2:1,"
-            "stop:0 #6c7bff, stop:1 #a86cf5);"
+            "background: #1565c0;"
             "border-radius: 32px; font-size: 28px;"));
         cardLay->addWidget(avatar, 0, Qt::AlignCenter);
 
@@ -247,13 +244,13 @@ MainWindow::MainWindow(QWidget *parent)
 
         QLabel *roleL = new QLabel(QString::fromStdString(u2 ? u2->role_name() : "用户"), card);
         roleL->setAlignment(Qt::AlignCenter);
-        roleL->setStyleSheet("color: #8a94a6;");
+        roleL->setStyleSheet("color: #6b7b8f;");
         cardLay->addWidget(roleL);
 
         cardLay->addSpacing(8);
         QLabel *idL = new QLabel(QStringLiteral("用户 ID：%1").arg(u2 ? u2->getId() : 0), card);
         idL->setAlignment(Qt::AlignCenter);
-        idL->setStyleSheet("color: #6b7688; font-size: 13px;");
+        idL->setStyleSheet("color: #5a6a7e; font-size: 13px;");
         cardLay->addWidget(idL);
 
         acctLay->addWidget(card, 0, Qt::AlignLeft);
