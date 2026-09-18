@@ -1,135 +1,131 @@
+// ============================================================
+// 文件说明：MaintenancePage.cpp —— 保养管理页具体实现
+// ============================================================
+
 #include "MaintenancePage.h"
 #include "AppContext.h"
 #include "Theme.h"
-#include "MaintenanceTask.h"
-#include "Equipment.h"
 
+#include "MaintenanceTask.h"
+
+// 引入 Qt 控件
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QPushButton>
 #include <QMessageBox>
-#include <QLabel>
-#include <QBrush>
-#include <QColor>
 
-static const int kTaskIdRole = Qt::UserRole + 1;
-
+// ============================================================
+// 构造函数：创建保养管理页
+// ============================================================
 MaintenancePage::MaintenancePage(QWidget *parent)
     : QWidget(parent)
 {
-    m_summary = new QLabel(this);
-    m_summary->setStyleSheet(QStringLiteral(
-        "color: #1f2937; font-size: 13px; font-weight: bold; padding: 4px 0;"));
+    // ---- 顶部按钮行 ----
+    m_executeBtn = new QPushButton(QStringLiteral("✔ 执行保养"), this);
+    QPushButton *refreshBtn = new QPushButton(QStringLiteral("🔄 刷新"), this);
 
-    QPushButton *execBtn = new QPushButton(QStringLiteral("🔧 执行选中保养"), this);
-    execBtn->setProperty("primary", true);
-    QPushButton *refBtn  = new QPushButton(QStringLiteral("刷新列表"), this);
-    connect(execBtn, &QPushButton::clicked, this, &MaintenancePage::onExecute);
-    connect(refBtn,  &QPushButton::clicked, this, &MaintenancePage::refreshTable);
+    connect(m_executeBtn, &QPushButton::clicked, this, &MaintenancePage::onExecute);
+    connect(refreshBtn, &QPushButton::clicked, this, &MaintenancePage::onRefresh);
 
     QHBoxLayout *btnRow = new QHBoxLayout;
-    btnRow->addWidget(m_summary);
+    btnRow->addWidget(m_executeBtn);
+    btnRow->addWidget(refreshBtn);
     btnRow->addStretch();
-    btnRow->addWidget(execBtn);
-    btnRow->addWidget(refBtn);
 
+    // ---- 保养任务表格（5列：任务ID、设备ID、触发原因、到期时间、状态）----
     m_table = new QTableWidget(0, 5, this);
     m_table->setHorizontalHeaderLabels(
-        { QStringLiteral("任务ID"), QStringLiteral("设备"), QStringLiteral("类型"),
-          QStringLiteral("计划日期"), QStringLiteral("状态") });
-    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+        { QStringLiteral("任务ID"), QStringLiteral("设备ID"),
+          QStringLiteral("触发原因"), QStringLiteral("到期时间"), QStringLiteral("状态") });
+    m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);  // 只读
     m_table->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_table->setAlternatingRowColors(true);
+    m_table->setAlternatingRowColors(true);  // 斑马纹
     m_table->verticalHeader()->setVisible(false);
     m_table->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
 
+    // ---- 整体垂直布局 ----
     QVBoxLayout *lay = new QVBoxLayout(this);
-    lay->setContentsMargins(24, 24, 24, 24);
-    lay->setSpacing(12);
-    lay->addLayout(btnRow);
-    lay->addWidget(m_table);
+    lay->setContentsMargins(24, 20, 24, 20);
+    lay->setSpacing(16);
+    lay->addLayout(btnRow);  // 顶部按钮
+    lay->addWidget(m_table); // 表格（拉伸占满）
 
-    refreshTable();
+    refreshTable();  // 初始加载
 }
 
+// ============================================================
+// refreshTable()：刷新保养任务表格
+// ============================================================
 void MaintenancePage::refreshTable()
 {
+    // 先扫描一下，生成新的到期保养任务
     AppContext::get().manager().scan_due_maintenance();
 
-    const auto& list = AppContext::get().manager().maintenance_tasks();
-    m_table->setRowCount(static_cast<int>(list.size()));
+    // 取所有保养任务
+    const auto& tasks = AppContext::get().manager().maintenance_tasks();
+    m_table->setRowCount(static_cast<int>(tasks.size()));
 
-    int pendingCount = 0;
-    int doneCount = 0;
-    int row = 0;
+    // 填充每一行
+    for (int i = 0; i < static_cast<int>(tasks.size()); ++i) {
+        const MaintenanceTask& t = tasks.at(i);
 
-    for (const MaintenanceTask& t : list) {
-        const QString equipName = AppContext::get().equipmentName(t.equipment_id());
-        const QString typeName = (t.type() == MaintenanceType::Periodic)
-                                      ? QStringLiteral("周期保养")
-                                      : QStringLiteral("次数保养");
-        const QString statusName = t.executed() ? QStringLiteral("已执行") : QStringLiteral("未执行");
+        // 第0列：任务ID
+        m_table->setItem(i, 0, new QTableWidgetItem(
+            AppContext::toQString(t.id())));
+        // 第1列：设备ID
+        m_table->setItem(i, 1, new QTableWidgetItem(
+            AppContext::toQString(t.equipment_id())));
+        // 第2列：触发原因（文字说明）
+        m_table->setItem(i, 2, new QTableWidgetItem(
+            AppContext::toQString(t.description())));
+        // 第3列：到期时间
+        m_table->setItem(i, 3, new QTableWidgetItem(
+            AppContext::toQString(t.due_time().to_string())));
 
-        if (t.executed()) ++doneCount; else ++pendingCount;
-
-        auto *idItem = new QTableWidgetItem(AppContext::toQString(t.id()));
-        idItem->setData(kTaskIdRole, AppContext::toQString(t.id()));
-        m_table->setItem(row, 0, idItem);
-        m_table->setItem(row, 1, new QTableWidgetItem(equipName));
-        m_table->setItem(row, 2, new QTableWidgetItem(typeName));
-        m_table->setItem(row, 3, new QTableWidgetItem(AppContext::toQString(t.scheduled_date().to_string())));
-
-        auto *statusItem = Theme::makeStatusItem(statusName);
-        statusItem->setData(kTaskIdRole, AppContext::toQString(t.id()));
-        m_table->setItem(row, 4, statusItem);
-
-        // 未执行行整行浅琥珀底突出
-        if (!t.executed()) {
-            for (int c = 0; c < 5; ++c) {
-                auto *item = m_table->item(row, c);
-                if (item) item->setBackground(QBrush(QColor(255, 248, 225)));
-            }
+        // 第4列：状态（已执行=灰色，待执行=黄色）
+        QTableWidgetItem *statusItem;
+        if (t.executed()) {
+            statusItem = new QTableWidgetItem(QStringLiteral("已完成"));
+            statusItem->setForeground(QColor(120, 120, 120));
+        } else {
+            statusItem = Theme::makeStatusItem(QStringLiteral("待保养"));
         }
-        ++row;
+        m_table->setItem(i, 4, statusItem);
     }
-
-    m_summary->setText(QStringLiteral("📋 共 %1 个保养任务（未执行 %2，已执行 %3）")
-                           .arg(list.size()).arg(pendingCount).arg(doneCount));
 }
 
-static QString selectedTaskId(QTableWidget *table)
-{
-    const int row = table->currentRow();
-    if (row < 0) return QString();
-    return table->item(row, 0)->data(kTaskIdRole).toString();
-}
-
+// ============================================================
+// onExecute()：执行保养
+// 把选中的保养任务标记为已完成，设备状态恢复为可用
+// ============================================================
 void MaintenancePage::onExecute()
 {
-    const QString taskId = selectedTaskId(m_table);
-    if (taskId.isEmpty()) {
+    const int row = m_table->currentRow();
+    if (row < 0) {
         QMessageBox::information(this, QStringLiteral("提示"),
                                  QStringLiteral("请先选中一条保养任务"));
         return;
     }
 
-    const auto answer = QMessageBox::question(this,
-        QStringLiteral("执行保养"),
-        QStringLiteral("确定执行保养任务「%1」吗？\n执行后设备保养计数器将重置。").arg(taskId),
-        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
-    if (answer != QMessageBox::Yes) return;
+    // 从表格里取任务ID
+    const std::string taskId = m_table->item(row, 0)->text().toStdString();
 
-    const bool ok = AppContext::get().manager().execute_maintenance_task(taskId.toStdString());
-    if (!ok) {
-        QMessageBox::warning(this, QStringLiteral("执行失败"),
-                             QStringLiteral("该任务可能已执行，或对应设备已被删除。"));
+    // 调用核心函数执行保养
+    if (!AppContext::get().manager().execute_maintenance(taskId)) {
+        QMessageBox::warning(this, QStringLiteral("操作失败"),
+                             QStringLiteral("该保养任务无法执行，可能已完成或不存在。"));
         return;
     }
 
-    QMessageBox::information(this, QStringLiteral("执行成功"),
-                             QStringLiteral("保养任务 %1 已执行，设备已恢复正常状态。").arg(taskId));
+    QMessageBox::information(this, QStringLiteral("保养完成"),
+                             QStringLiteral("保养任务已完成，设备状态已更新为可用。"));
     refreshTable();
-    emit dataChanged();
+}
+
+// 刷新按钮
+void MaintenancePage::onRefresh()
+{
+    refreshTable();
 }

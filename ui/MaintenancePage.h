@@ -1,35 +1,36 @@
-#ifndef MAINTENANCEPAGE_H   // 头文件保护宏开始
-#define MAINTENANCEPAGE_H   // 定义头文件保护宏
+// ============================================================
+// 文件说明：MaintenancePage.h —— 保养管理页头文件
+// 保养管理页：查看设备保养任务，执行保养（标记已完成）
+// ============================================================
 
-#include <QWidget>        // 控件基类
+#ifndef MAINTENANCEPAGE_H
+#define MAINTENANCEPAGE_H
 
-class QTableWidget;       // 前向声明：表格控件
-class QLabel;             // 前向声明：统计标签
+#include <QWidget>        // 基类
 
-// =============================================================
-// MaintenancePage —— 保养任务管理页（界面组 D，新增功能）
-// 表格列出全部保养任务（周期型/次数型）；选中后可"执行保养"。
-// 刷新时调核心 scan_due_maintenance() 自动生成到期任务。
-// 表格列：任务ID / 设备 / 类型 / 计划日期 / 状态（未执行/已执行）
-// =============================================================
-class MaintenancePage : public QWidget   // 保养管理页
+class QTableWidget;       // 前向声明：表格
+class QPushButton;        // 前向声明：按钮
+
+// ============================================================
+// MaintenancePage 类：保养管理页
+// ============================================================
+class MaintenancePage : public QWidget
 {
-    Q_OBJECT                            // 信号槽元对象宏
+    Q_OBJECT
+
 public:
-    explicit MaintenancePage(QWidget *parent = nullptr);   // 构造
+    explicit MaintenancePage(QWidget *parent = nullptr);
 
 public slots:
-    void refreshTable();          // 重新加载全部保养任务到表格（并扫描生成新到期任务）
-
-signals:
-    void dataChanged();           // 执行保养后通知其它页面同步刷新
+    void refreshTable();  // 刷新保养任务表格
 
 private slots:
-    void onExecute();             // "执行选中保养"按钮
+    void onExecute();      // 点“执行保养”
+    void onRefresh();      // 点“刷新”
 
 private:
-    QTableWidget *m_table;        // 显示保养任务的表格
-    QLabel       *m_summary;      // 顶部统计摘要（未执行/已执行数量）
+    QTableWidget *m_table;      // 保养任务表格
+    QPushButton  *m_executeBtn; // 执行保养按钮
 };
 
-#endif // MAINTENANCEPAGE_H  // 头文件保护结束
+#endif // MAINTENANCEPAGE_H
