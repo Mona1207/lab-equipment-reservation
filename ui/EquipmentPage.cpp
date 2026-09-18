@@ -42,7 +42,7 @@ public:
         m_idEdit->setPlaceholderText(QStringLiteral("如 EQ-0005"));
         if (m_mode == Edit) {
             m_idEdit->setEnabled(false);
-            m_idEdit->setStyleSheet(QStringLiteral("background: #f0f0f0; color: #888;"));
+            m_idEdit->setStyleSheet(QStringLiteral("background: #eef1f5; color: #8a94a6;"));
         }
 
         m_nameEdit = new QLineEdit(this);
@@ -120,7 +120,7 @@ private:
 };
 
 // =============================================================
-// EquipmentCard —— 单张设备卡片（磨砂玻璃风格）
+// EquipmentCard —— 单张设备卡片（严肃工业风格）
 // 点击卡片选中，再次点击取消选中
 // =============================================================
 class EquipmentCard : public QFrame
@@ -142,13 +142,13 @@ public:
         const QColor sc = Theme::statusColor(status);
         const QString hex = sc.name();
 
-        // 根据设备名选一个彩色图标块颜色
-        QString iconColor = "#6c7bff";
+        // 根据设备名选一个图标块颜色（沉稳工业配色）
+        QString iconColor = "#1565c0";
         const QString nm = AppContext::toQString(eq->name());
-        if (nm.contains(QStringLiteral("示波器")))      iconColor = "#6c7bff";
-        else if (nm.contains(QStringLiteral("信号")))    iconColor = "#22b86a";
-        else if (nm.contains(QStringLiteral("万用")))   iconColor = "#f5a623";
-        else if (nm.contains(QStringLiteral("电源")))    iconColor = "#ef5350";
+        if (nm.contains(QStringLiteral("示波器")))      iconColor = "#1565c0";
+        else if (nm.contains(QStringLiteral("信号")))    iconColor = "#2e7d32";
+        else if (nm.contains(QStringLiteral("万用")))   iconColor = "#f57f17";
+        else if (nm.contains(QStringLiteral("电源")))    iconColor = "#c62828";
 
         auto *mainLay = new QVBoxLayout(this);
         mainLay->setContentsMargins(18, 16, 18, 14);
@@ -162,14 +162,14 @@ public:
         iconBox->setAlignment(Qt::AlignCenter);
         iconBox->setText(QStringLiteral("⚙"));
         iconBox->setStyleSheet(QStringLiteral(
-            "background: %1; border-radius: 12px; color: white; font-size: 20px;")
+            "background: %1; border-radius: 4px; color: white; font-size: 20px;")
             .arg(iconColor));
         topRow->addWidget(iconBox);
         topRow->addStretch();
 
         QLabel *statusTag = new QLabel(QStringLiteral("● ") + status, this);
         statusTag->setStyleSheet(QStringLiteral(
-            "color: %1; background: rgba(255,255,255,0.6); border-radius: 9px;"
+            "color: %1; background: #f5f7fa; border: 1px solid #d0d7e0; border-radius: 3px;"
             "padding: 3px 12px; font-size: 12px; font-weight: bold;")
             .arg(hex));
         topRow->addWidget(statusTag);
@@ -181,11 +181,11 @@ public:
         nf.setPointSize(13);
         nf.setBold(true);
         nameLbl->setFont(nf);
-        nameLbl->setStyleSheet("color: #2b3445;");
+        nameLbl->setStyleSheet("color: #1f2937;");
         mainLay->addWidget(nameLbl);
 
         QLabel *specLbl = new QLabel(AppContext::toQString(eq->spec()), this);
-        specLbl->setStyleSheet("color: #8a94a6; font-size: 12px;");
+        specLbl->setStyleSheet("color: #6b7b8f; font-size: 12px;");
         mainLay->addWidget(specLbl);
 
         mainLay->addStretch();
@@ -197,16 +197,16 @@ public:
             ? QString(QStringLiteral("保养周期：%1 天")).arg(eq->cycle_value())
             : QString(QStringLiteral("保养周期：%1 次")).arg(eq->cycle_value());
         QLabel *cycleLbl = new QLabel(cycle, this);
-        cycleLbl->setStyleSheet("color: #a0aabf; font-size: 11px;");
+        cycleLbl->setStyleSheet("color: #8a94a6; font-size: 11px;");
         bottomRow->addWidget(cycleLbl);
         bottomRow->addStretch();
 
         QPushButton *delBtn = new QPushButton(QStringLiteral("删除"), this);
         delBtn->setFixedSize(56, 28);
         delBtn->setStyleSheet(QStringLiteral(
-            "QPushButton { background: rgba(239,83,80,0.1); color: #ef5350;"
-            "border: 1px solid rgba(239,83,80,0.25); border-radius: 8px; font-size: 11px; padding: 0; }"
-            "QPushButton:hover { background: #ef5350; color: white; }"));
+            "QPushButton { background: rgba(198,40,40,0.08); color: #c62828;"
+            "border: 1px solid rgba(198,40,40,0.3); border-radius: 4px; font-size: 11px; padding: 0; }"
+            "QPushButton:hover { background: #c62828; color: white; border-color: #c62828; }"));
         connect(delBtn, &QPushButton::clicked, this, &EquipmentCard::onDeleteClicked);
         bottomRow->addWidget(delBtn);
 
@@ -216,8 +216,8 @@ public:
     void setSelected(bool sel) {
         selected = sel;
         setStyleSheet(sel
-            ? QStringLiteral("QFrame[glassCard=\"true\"] { background: rgba(238,240,255,0.95); border: 2px solid #6c7bff; border-radius: 18px; }")
-            : QStringLiteral("QFrame[glassCard=\"true\"] { background: rgba(255,255,255,0.75); border-radius: 18px; border: 1px solid rgba(255,255,255,0.8); }"));
+            ? QStringLiteral("QFrame[glassCard=\"true\"] { background: #e3f0fd; border: 2px solid #1565c0; border-radius: 6px; }")
+            : QStringLiteral("QFrame[glassCard=\"true\"] { background: #ffffff; border-radius: 6px; border: 1px solid #d0d7e0; }"));
     }
 
 signals:
@@ -310,7 +310,7 @@ void EquipmentPage::refreshTable()
     if (list.empty()) {
         QLabel *empty = new QLabel(QStringLiteral("暂无设备，点击「添加设备」开始"), m_gridContainer);
         empty->setAlignment(Qt::AlignCenter);
-        empty->setStyleSheet("color: #8a94a6; font-size: 15px;");
+        empty->setStyleSheet("color: #6b7b8f; font-size: 15px;");
         m_grid->addWidget(empty, 0, 0);
     }
 }
