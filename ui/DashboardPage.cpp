@@ -15,30 +15,30 @@
 #include <QFrame>            // 卡片框架
 #include <QDateTime>         // Qt 时间（判断今天）
 
-// 创建一个 KPI 卡片：图标胶囊 + 大数字 + 标题（磨砂玻璃风格）
+// 创建一个 KPI 卡片：图标方块 + 大数字 + 标题（严肃工业风格）
 static QFrame* createKpiCard(const QString& icon, const QString& title,
                               QLabel*& valueLabel, const QString& color)
 {
     auto *card = new QFrame;
     card->setStyleSheet(QStringLiteral(
         "QFrame {"
-        "  background: rgba(255, 255, 255, 0.78);"
-        "  border-radius: 14px;"
-        "  border: 1px solid rgba(255, 255, 255, 0.9);"
+        "  background: #ffffff;"
+        "  border-radius: 6px;"
+        "  border: 1px solid #d0d7e0;"
         "}"
         "QFrame:hover {"
-        "  background: rgba(255, 255, 255, 0.95);"
+        "  background: #ffffff;"
         "  border: 1px solid %1;"
         "}").arg(color));
 
-    // 图标胶囊：彩色渐变圆角小块
+    // 图标方块：实色圆角小方块
     auto *iconBox = new QFrame(card);
     iconBox->setFixedSize(46, 46);
     iconBox->setStyleSheet(QStringLiteral(
         "QFrame {"
-        "  background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 %1, stop:1 %2);"
-        "  border-radius: 12px; border: none;"
-        "}").arg(color, color));
+        "  background: %1;"
+        "  border-radius: 4px; border: none;"
+        "}").arg(color));
     auto *iconLab = new QLabel(icon, iconBox);
     iconLab->setStyleSheet(QStringLiteral("font-size: 22px; background: transparent;"));
     auto *iconLay = new QHBoxLayout(iconBox);
@@ -51,7 +51,7 @@ static QFrame* createKpiCard(const QString& icon, const QString& title,
 
     auto *titleLab = new QLabel(title, card);
     titleLab->setStyleSheet(QStringLiteral(
-        "color: #6b7688; font-size: 13px; background: transparent;"));
+        "color: #5a6a7e; font-size: 13px; background: transparent;"));
 
     auto *lay = new QVBoxLayout(card);
     lay->setContentsMargins(18, 16, 18, 16);
@@ -72,13 +72,13 @@ DashboardPage::DashboardPage(QWidget *parent)
     kpiRow->setSpacing(16);
 
     kpiRow->addWidget(createKpiCard(QStringLiteral("🖥"), QStringLiteral("设备总数"),
-                                     m_equipCount, QStringLiteral("#4887ff")));
+                                     m_equipCount, QStringLiteral("#1565c0")));
     kpiRow->addWidget(createKpiCard(QStringLiteral("📅"), QStringLiteral("今日预约"),
-                                     m_todayResv, QStringLiteral("#229a16")));
+                                     m_todayResv, QStringLiteral("#2e7d32")));
     kpiRow->addWidget(createKpiCard(QStringLiteral("⏳"), QStringLiteral("待审批"),
-                                     m_pendingCount, QStringLiteral("#e67e00")));
+                                     m_pendingCount, QStringLiteral("#f57f17")));
     kpiRow->addWidget(createKpiCard(QStringLiteral("🔧"), QStringLiteral("待保养"),
-                                     m_maintCount, QStringLiteral("#dc4c5c")));
+                                     m_maintCount, QStringLiteral("#c62828")));
 
     // ---- 下方：最近预约 + 设备状态 ----
     auto *bottomRow = new QHBoxLayout;
@@ -87,11 +87,11 @@ DashboardPage::DashboardPage(QWidget *parent)
     // 最近预约
     auto *recentBox = new QFrame;
     recentBox->setStyleSheet(QStringLiteral(
-        "QFrame { background: rgba(255, 255, 255, 0.78); border-radius: 14px;"
-        " border: 1px solid rgba(255, 255, 255, 0.9); }"));
+        "QFrame { background: #ffffff; border-radius: 6px;"
+        " border: 1px solid #d0d7e0; }"));
     auto *recentTitle = new QLabel(QStringLiteral("📋 最近预约记录"), recentBox);
     recentTitle->setStyleSheet(QStringLiteral(
-        "font-size: 15px; font-weight: bold; color: #2b3445; padding: 4px 0; background: transparent;"));
+        "font-size: 15px; font-weight: bold; color: #1f2937; padding: 4px 0; background: transparent;"));
 
     m_recentTable = new QTableWidget(0, 4, recentBox);
     m_recentTable->setHorizontalHeaderLabels(
@@ -112,15 +112,15 @@ DashboardPage::DashboardPage(QWidget *parent)
     // 设备状态分布
     auto *statusBox = new QFrame;
     statusBox->setStyleSheet(QStringLiteral(
-        "QFrame { background: rgba(255, 255, 255, 0.78); border-radius: 14px;"
-        " border: 1px solid rgba(255, 255, 255, 0.9); }"));
+        "QFrame { background: #ffffff; border-radius: 6px;"
+        " border: 1px solid #d0d7e0; }"));
     auto *statusTitle = new QLabel(QStringLiteral("📊 设备状态分布"), statusBox);
     statusTitle->setStyleSheet(QStringLiteral(
-        "font-size: 15px; font-weight: bold; color: #2b3445; padding: 4px 0; background: transparent;"));
+        "font-size: 15px; font-weight: bold; color: #1f2937; padding: 4px 0; background: transparent;"));
 
     m_statusDist = new QLabel(statusBox);
     m_statusDist->setStyleSheet(QStringLiteral(
-        "font-size: 14px; color: #2b3445; line-height: 2;"));
+        "font-size: 14px; color: #1f2937; line-height: 2;"));
     m_statusDist->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     m_statusDist->setWordWrap(true);
 
@@ -199,9 +199,9 @@ void DashboardPage::refresh()
     }
     m_statusDist->setText(QStringLiteral(
         "<div style='line-height:2.2;'>"
-        "<span style='color:#229a16;'>● 可用：%1 台</span><br>"
-        "<span style='color:#e67e00;'>● 已借出：%2 台</span><br>"
-        "<span style='color:#788496;'>● 维护中：%3 台</span><br><br>"
-        "<span style='color:#6b7688; font-size:12px;'>共 %4 台设备</span>"
+        "<span style='color:#2e7d32;'>● 可用：%1 台</span><br>"
+        "<span style='color:#e65100;'>● 已借出：%2 台</span><br>"
+        "<span style='color:#546e7a;'>● 维护中：%3 台</span><br><br>"
+        "<span style='color:#5a6a7e; font-size:12px;'>共 %4 台设备</span>"
         "</div>").arg(available).arg(borrowed).arg(maintenance).arg(equipTotal));
 }

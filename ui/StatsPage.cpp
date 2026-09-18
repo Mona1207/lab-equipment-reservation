@@ -95,12 +95,12 @@ void StatsPage::drawPieChart()
         series->append(QStringLiteral("无设备"), 1);
     }
 
-    // 设置颜色
+    // 设置颜色（沉稳工业配色）
     const QList<QColor> colors = {
-        QColor(34, 154, 22),   // 可用-绿
-        QColor(230, 126, 0),   // 已借出-橙
-        QColor(120, 132, 150), // 维护中-灰
-        QColor(200, 200, 200)  // 无设备
+        QColor(46, 125, 50),    // 可用-深绿
+        QColor(230, 81, 0),     // 已借出-深橙
+        QColor(84, 110, 122),   // 维护中-蓝灰
+        QColor(200, 200, 200)   // 无设备
     };
     for (int i = 0; i < series->slices().size() && i < colors.size(); ++i) {
         series->slices()[i]->setColor(colors[i]);
@@ -141,7 +141,7 @@ void StatsPage::drawUsageChart()
         const double pct = static_cast<double>(eqPtr->usage_count()) / totalUsage * 100.0;
         *set << pct;
     }
-    set->setColor(QColor(72, 135, 255));
+    set->setColor(QColor(21, 101, 192));   // 科技蓝
 
     auto *series = new QHorizontalBarSeries();
     series->append(set);
@@ -193,7 +193,7 @@ void StatsPage::drawBarChart()
 
     auto *series = new QBarSeries();
     series->append(set);
-    set->setColor(QColor(72, 135, 255));
+    set->setColor(QColor(21, 101, 192));   // 科技蓝
 
     auto *chart = new QChart();
     chart->addSeries(series);
