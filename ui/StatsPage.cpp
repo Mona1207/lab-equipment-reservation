@@ -1,82 +1,180 @@
-#include "StatsPage.h"    // 对应头文件
-#include "AppContext.h"   // 界面适配层
-#include "DateTime.h"     // 核心时间
+// ============================================================
+// 文件说明：StatsPage.cpp —— 统计分析页具体实现
+// ============================================================
 
-#include "Equipment.h"    // 核心设备实体
+#include "StatsPage.h"
+#include "AppContext.h"
 
-#include <QVBoxLayout>    // 垂直布局
-#include <QHBoxLayout>    // 水平布局
-#include <QPushButton>    // 按钮
-#include <QLabel>         // 文本标签
-#include <QPainter>       // 绘图（抗锯齿）
-#include <QtCharts/QChart>
+#include "Reservation.h"
+#include "Equipment.h"
+#include "DateTime.h"
+
+// 引入 Qt Charts 模块（图表功能）
 #include <QtCharts/QChartView>
 #include <QtCharts/QBarSeries>
 #include <QtCharts/QBarSet>
 #include <QtCharts/QBarCategoryAxis>
-#include <QtCharts/QHorizontalBarSeries>
+#include <QtCharts/QLineSeries>
+#include <QtCharts/QCandlestickSeries>
 #include <QtCharts/QValueAxis>
+#include <QtCharts/QLegend>
 #include <QtCharts/QPieSeries>
 #include <QtCharts/QPieSlice>
 
-QT_USE_NAMESPACE
-#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
-using namespace QtCharts;
-#endif
+// 引入 Qt 布局
+#include <QVBoxLayout>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QFrame>
+#include <QDateTime>
 
-// 构造统计页
+// 使用 QtCharts 命名空间
+// 这样不用每次写 QtCharts::QBarSeries，直接写 QBarSeries 就行
+QT_CHARTS_USE_NAMESPACE
+
+// ============================================================
+// 构造函数：创建统计分析页
+// ============================================================
 StatsPage::StatsPage(QWidget *parent)
     : QWidget(parent)
 {
-    QPushButton *refreshBtn = new QPushButton(QStringLiteral("刷新统计"), this);
-    connect(refreshBtn, &QPushButton::clicked, this, &StatsPage::refresh);
+    // ---- 第 1 步：上面一排两个图表（左：柱状图，右：饼图）----
 
-    QHBoxLayout *top = new QHBoxLayout;
-    top->addWidget(new QLabel(QStringLiteral("📊 统计分析"), this));
-    top->addStretch();
-    top->addWidget(refreshBtn);
+    // 左：设备使用率柱状图
+    m_barChart = new QChart();
+    m_barChart->setTitle(QStringLiteral("各设备使用次数（次）"));
+    m_barChart->legend()->setVisible(false);  // 隐藏图例
 
-    // 上方：饼图 + 使用率图（左右各半）
-    m_pieView = new QChartView(this);
+    m_barSeries = new QBarSeries();  // 柱状图数据系列
+    m_barChart->addSeries(m_barSeries);
+
+    // X 轴：设备名称
+    QBarCategoryAxis *barAxisX = new QBarCategoryAxis();
+    m_barChart->addAxis(barAxisX, Qt::AlignBottom);
+    m_barSeries->attachAxis(barAxisX);
+
+    // Y 轴：次数
+    QValueAxis *barAxisY = new QValueAxis();
+    barAxisY->setRange(0, 10);  // 范围 0~10
+    barAxisY->setLabelFormat("%d");
+    m_barChart->addAxis(barAxisY, Qt::AlignLeft);
+    m_barSeries->attachAxis(barAxisY);
+
+    m_barView = new QChartView(m_barChart);
+    m_barView->setRenderHint(QPainter::Antialiasing);  // 抗锯齿（让线条平滑）
+    m_barView->setMinimumHeight(260);
+
+    // 右：设备状态分布饼图
+    m_pieChart = new QChart();
+    m_pieChart->setTitle(QStringLiteral("设备状态分布"));
+
+    m_pieSeries = new QPieSeries();  // 饼图数据系列
+    m_pieChart->addSeries(m_pieSeries);
+    m_pieChart->legend()->setAlignment(Qt::AlignRight);  // 图例靠右
+
+    m_pieView = new QChartView(m_pieChart);
     m_pieView->setRenderHint(QPainter::Antialiasing);
-    m_pieView->setMinimumHeight(280);
+    m_pieView->setMinimumHeight(260);
 
-    m_usageView = new QChartView(this);
-    m_usageView->setRenderHint(QPainter::Antialiasing);
-    m_usageView->setMinimumHeight(280);
+    // 上面一行水平布局：左柱状图 + 右饼图
+    auto *topRow = new QHBoxLayout;
+    topRow->setSpacing(16);
+    topRow->addWidget(m_barView, 3);  // 左占3份
+    topRow->addWidget(m_pieView, 2);  // 右占2份
 
-    QHBoxLayout *topCharts = new QHBoxLayout;
-    topCharts->setSpacing(16);
-    topCharts->addWidget(m_pieView, 1);
-    topCharts->addWidget(m_usageView, 1);
+    // ---- 第 2 步：中间折线图（近7天预约趋势）----
+    m_lineChart = new QChart();
+    m_lineChart->setTitle(QStringLiteral("近 7 天预约趋势（条）"));
+    m_lineChart->legend()->setVisible(false);
 
-    // 下方：预约次数柱状图（全宽）
-    m_barView = new QChartView(this);
-    m_barView->setRenderHint(QPainter::Antialiasing);
-    m_barView->setMinimumHeight(300);
+    QLineSeries *lineSeries = new QLineSeries();  // 折线数据
+    lineSeries->setColor(QColor("#1565c0"));     // 蓝色
+    lineSeries->setPointsVisible(true);           // 显示数据点圆点
 
-    QVBoxLayout *lay = new QVBoxLayout(this);
-    lay->setContentsMargins(24, 24, 24, 24);
-    lay->setSpacing(16);
-    lay->addLayout(top);
-    lay->addLayout(topCharts);
-    lay->addWidget(m_barView, 1);
+    m_lineChart->addSeries(lineSeries);
 
-    refresh();
+    // X 轴：日期
+    QValueAxis *lineAxisX = new QValueAxis();
+    lineAxisX->setRange(0, 6);  // 0~6 对应 7 天
+    lineAxisX->setLabelFormat("Day %d");
+    m_lineChart->addAxis(lineAxisX, Qt::AlignBottom);
+    lineSeries->attachAxis(lineAxisX);
+
+    // Y 轴：预约条数
+    QValueAxis *lineAxisY = new QValueAxis();
+    lineAxisY->setRange(0, 10);
+    lineAxisY->setLabelFormat("%d");
+    m_lineChart->addAxis(lineAxisY, Qt::AlignLeft);
+    lineSeries->attachAxis(lineAxisY);
+
+    m_lineView = new QChartView(m_lineChart);
+    m_lineView->setRenderHint(QPainter::Antialiasing);
+    m_lineView->setMinimumHeight(220);
+
+    // ---- 第 3 步：底部文字统计汇总 ----
+    m_summary = new QLabel(this);
+    m_summary->setStyleSheet(QStringLiteral(
+        "background: #ffffff; border: 1px solid #d0d7e0; border-radius: 6px;"
+        "padding: 16px 20px; font-size: 13px; color: #1f2937; line-height: 1.8;"));
+    m_summary->setWordWrap(true);
+
+    // ---- 第 4 步：整体垂直布局 ----
+    auto *mainLay = new QVBoxLayout(this);
+    mainLay->setContentsMargins(24, 20, 24, 20);
+    mainLay->setSpacing(16);
+    mainLay->addLayout(topRow);     // 上面：柱状图+饼图
+    mainLay->addWidget(m_lineView); // 中间：折线图
+    mainLay->addWidget(m_summary);  // 底部：文字统计
+
+    refresh();  // 初始加载数据
 }
 
-// 统一刷新所有图表
+// ============================================================
+// refresh()：刷新所有图表数据
+// ============================================================
 void StatsPage::refresh()
 {
-    drawPieChart();
-    drawUsageChart();
-    drawBarChart();
-}
-
-// 设备状态饼图
-void StatsPage::drawPieChart()
-{
     ReservationManager& mgr = AppContext::get().manager();
+
+    // ---- 1. 柱状图：每台设备的使用次数 ----
+    // 先清空旧数据
+    m_barSeries->clear();
+
+    // X 轴类别列表
+    QStringList categories;
+
+    int maxUses = 0;  // 最大使用次数（用来设置Y轴范围）
+
+    for (const auto& eqPtr : mgr.equipments()) {
+        const Equipment* e = eqPtr.get();
+        const int uses = e->usage_count();
+        maxUses = qMax(maxUses, uses);  // 更新最大值
+
+        // 新建一个柱子（一个 QBarSet 就是一根柱子）
+        QBarSet *set = new QBarSet(AppContext::toQString(e->name()));
+        *set << uses;  // 设置柱子高度
+
+        // 给柱子上色
+        set->setColor(QColor("#1565c0"));
+
+        m_barSeries->append(set);  // 把柱子加到系列里
+        categories << AppContext::toQString(e->name());  // 设备名加到X轴
+    }
+
+    // 更新 X 轴类别
+    QBarCategoryAxis *barAxisX =
+        qobject_cast<QBarCategoryAxis*>(m_barChart->axes(Qt::Horizontal).first());
+    if (barAxisX) barAxisX->clear();
+    for (const QString& cat : categories) barAxisX->append(cat);
+
+    // 更新 Y 轴范围
+    QValueAxis *barAxisY =
+        qobject_cast<QValueAxis*>(m_barChart->axes(Qt::Vertical).first());
+    if (barAxisY) barAxisY->setRange(0, qMax(5, maxUses + 2));
+
+    // ---- 2. 饼图：设备状态分布 ----
+    m_pieSeries->clear();
+
     int available = 0, borrowed = 0, maintenance = 0;
     for (const auto& eqPtr : mgr.equipments()) {
         switch (eqPtr->status()) {
@@ -86,135 +184,81 @@ void StatsPage::drawPieChart()
         }
     }
 
-    auto *series = new QPieSeries();
-    if (available > 0)   series->append(QStringLiteral("可用"), available);
-    if (borrowed > 0)    series->append(QStringLiteral("已借出"), borrowed);
-    if (maintenance > 0) series->append(QStringLiteral("维护中"), maintenance);
-
-    if (series->slices().isEmpty()) {
-        series->append(QStringLiteral("无设备"), 1);
+    // 把三种状态加到饼图里
+    if (available > 0) {
+        QPieSlice *s = m_pieSeries->append(
+            QStringLiteral("可用 %1 台").arg(available), available);
+        s->setColor(QColor("#2e7d32"));  // 绿色
+    }
+    if (borrowed > 0) {
+        QPieSlice *s = m_pieSeries->append(
+            QStringLiteral("已借出 %1 台").arg(borrowed), borrowed);
+        s->setColor(QColor("#e65100"));  // 橙色
+    }
+    if (maintenance > 0) {
+        QPieSlice *s = m_pieSeries->append(
+            QStringLiteral("维护中 %1 台").arg(maintenance), maintenance);
+        s->setColor(QColor("#546e7a"));  // 灰色
     }
 
-    // 设置颜色（沉稳工业配色）
-    const QList<QColor> colors = {
-        QColor(46, 125, 50),    // 可用-深绿
-        QColor(230, 81, 0),     // 已借出-深橙
-        QColor(84, 110, 122),   // 维护中-蓝灰
-        QColor(200, 200, 200)   // 无设备
-    };
-    for (int i = 0; i < series->slices().size() && i < colors.size(); ++i) {
-        series->slices()[i]->setColor(colors[i]);
-        series->slices()[i]->setLabelVisible(true);
-        series->slices()[i]->setLabel(QStringLiteral("%1 %2%")
-            .arg(series->slices()[i]->label())
-            .arg(QString::number(series->slices()[i]->percentage() * 100, 'f', 0)));
-    }
+    // ---- 3. 折线图：近7天预约趋势 ----
+    QLineSeries *lineSeries =
+        qobject_cast<QLineSeries*>(m_lineChart->series().first());
+    if (lineSeries) lineSeries->clear();
 
-    auto *chart = new QChart();
-    chart->addSeries(series);
-    chart->setTitle(QStringLiteral("设备状态分布"));
-    chart->legend()->setVisible(true);
-    chart->legend()->setAlignment(Qt::AlignBottom);
-    chart->setAnimationOptions(QChart::SeriesAnimations);
-
-    QChart *old = m_pieView->chart();
-    m_pieView->setChart(chart);
-    if (old) old->deleteLater();
-}
-
-// 设备使用率横向柱状图（使用次数 / 总使用次数）
-void StatsPage::drawUsageChart()
-{
-    ReservationManager& mgr = AppContext::get().manager();
-    const auto& equipments = mgr.equipments();
-
-    int totalUsage = 0;
-    for (const auto& eqPtr : equipments)
-        totalUsage += eqPtr->usage_count();
-    if (totalUsage == 0) totalUsage = 1; // 防除零
-
-    auto *set = new QBarSet(QStringLiteral("使用率(%)"));
-    QStringList categories;
-
-    for (const auto& eqPtr : equipments) {
-        categories << AppContext::toQString(eqPtr->name());
-        const double pct = static_cast<double>(eqPtr->usage_count()) / totalUsage * 100.0;
-        *set << pct;
-    }
-    set->setColor(QColor(21, 101, 192));   // 科技蓝
-
-    auto *series = new QHorizontalBarSeries();
-    series->append(set);
-
-    auto *chart = new QChart();
-    chart->addSeries(series);
-    chart->setTitle(QStringLiteral("设备使用率（按使用次数占比）"));
-    chart->legend()->setVisible(true);
-    chart->legend()->setAlignment(Qt::AlignBottom);
-    chart->setAnimationOptions(QChart::SeriesAnimations);
-
-    auto *axisY = new QBarCategoryAxis();
-    axisY->append(categories);
-    chart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
-
-    auto *axisX = new QValueAxis();
-    axisX->setTitleText(QStringLiteral("占比(%)"));
-    axisX->setRange(0, 100);
-    axisX->setLabelFormat(QStringLiteral("%.0f"));
-    chart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
-
-    QChart *old = m_usageView->chart();
-    m_usageView->setChart(chart);
-    if (old) old->deleteLater();
-}
-
-// 预约次数柱状图（原有逻辑保留）
-void StatsPage::drawBarChart()
-{
-    ReservationManager& mgr = AppContext::get().manager();
-
+    // 统计最近7天每天的预约条数
     const DateTime now = DateTime::now();
-    const long long cur = now.to_minutes();
-    const DateTime from = DateTime::from_minutes(cur - 365LL * 24 * 60);
-    const DateTime to   = DateTime::from_minutes(cur + 365LL * 24 * 60);
+    QVector<int> dailyCounts(7, 0);  // 7个0，对应7天
 
-    const auto ranking = mgr.ranking_by_count(from, to);
-    auto *set = new QBarSet(QStringLiteral("预约次数"));
-    QStringList categories;
-    qreal maxValue = 1;
-
-    for (const auto& kv : ranking) {
-        categories << AppContext::get().equipmentName(kv.first);
-        *set << static_cast<qreal>(kv.second);
-        maxValue = qMax(maxValue, static_cast<qreal>(kv.second));
+    for (const Reservation& r : mgr.reservations()) {
+        const int diffDays = r.start_time().days_until(now);  // 距离今天多少天
+        // 只统计最近7天内的
+        if (diffDays <= 0 && diffDays > -7) {
+            const int idx = -diffDays;  // 0=今天，1=昨天...
+            dailyCounts[idx]++;
+        }
     }
 
-    auto *series = new QBarSeries();
-    series->append(set);
-    set->setColor(QColor(21, 101, 192));   // 科技蓝
+    // 把数据加到折线图
+    int maxDaily = 0;
+    for (int i = 6; i >= 0; --i) {  // 从6天前到今天
+        const int idx = 6 - i;     // 横轴坐标
+        lineSeries->append(idx, dailyCounts[i]);
+        maxDaily = qMax(maxDaily, dailyCounts[i]);
+    }
 
-    auto *chart = new QChart();
-    chart->addSeries(series);
-    chart->setTitle(QStringLiteral("设备被预约次数柱状图"));
-    chart->legend()->setVisible(true);
-    chart->legend()->setAlignment(Qt::AlignBottom);
-    chart->setAnimationOptions(QChart::SeriesAnimations);
+    // 更新 Y 轴范围
+    QValueAxis *lineAxisY =
+        qobject_cast<QValueAxis*>(m_lineChart->axes(Qt::Vertical).first());
+    if (lineAxisY) lineAxisY->setRange(0, qMax(3, maxDaily + 2));
 
-    auto *axisX = new QBarCategoryAxis();
-    axisX->append(categories);
-    chart->addAxis(axisX, Qt::AlignBottom);
-    series->attachAxis(axisX);
+    // ---- 4. 底部文字统计 ----
+    const auto& allResv = mgr.reservations();
+    int totalResv = static_cast<int>(allResv.size());
+    int approvedCount = 0, pendingCount = 0, rejectedCount = 0, cancelledCount = 0;
+    for (const Reservation& r : allResv) {
+        switch (r.status()) {
+        case ReservationStatus::Approved:  ++approvedCount;  break;
+        case ReservationStatus::Pending:   ++pendingCount;   break;
+        case ReservationStatus::Rejected:  ++rejectedCount;  break;
+        case ReservationStatus::Cancelled: ++cancelledCount; break;
+        default: break;
+        }
+    }
 
-    auto *axisY = new QValueAxis();
-    axisY->setTitleText(QStringLiteral("预约次数"));
-    axisY->setRange(0, maxValue + 1);
-    axisY->setLabelFormat(QStringLiteral("%d"));
-    chart->addAxis(axisY, Qt::AlignLeft);
-    series->attachAxis(axisY);
+    // 设备总数
+    const int equipTotal = static_cast<int>(mgr.equipments().size());
+    // 活跃设备（已借出的）
+    int activeEquip = 0;
+    for (const auto& eqPtr : mgr.equipments())
+        if (eqPtr->status() == EquipmentStatus::Borrowed) ++activeEquip;
 
-    QChart *old = m_barView->chart();
-    m_barView->setChart(chart);
-    if (old) old->deleteLater();
+    // 设置底部文字
+    m_summary->setText(QStringLiteral(
+        "📊 系统统计汇总：\n"
+        "&nbsp;&nbsp;• 设备总数：%1 台（在用 %2 台）\n"
+        "&nbsp;&nbsp;• 预约总数：%3 条（已通过 %4，待审批 %5，已拒绝 %6，已取消 %7）"
+        ).arg(equipTotal).arg(activeEquip)
+         .arg(totalResv).arg(approvedCount).arg(pendingCount)
+         .arg(rejectedCount).arg(cancelledCount));
 }
